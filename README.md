@@ -18,8 +18,10 @@ func (w webHook) OnMessage(req teams.Request) (teams.Response, error) {
 }
 
 func main() {
-	lambda.Start(teams.NewHandler(webHook{}))
+	lambda.Start(teams.NewHandler(false, "", webHook{}))
 }
 ```
 
 The main function starts the Lambda API and registers your callback. Then you simply process the request and return the response, using the BuildResponse helper method.
+
+This library also supports HMAC authenctication. Simply pass in 'true' and the Base64 encoded String returned by Microsoft Teams when you register your callback URL.

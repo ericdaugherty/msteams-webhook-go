@@ -13,5 +13,5 @@ func (w webHook) OnMessage(req teams.Request) (teams.Response, error) {
 }
 
 func main() {
-	lambda.Start(teams.NewHandler(webHook{}))
+	lambda.Start(teams.NewHandler(false, "", webHook{}))
 }

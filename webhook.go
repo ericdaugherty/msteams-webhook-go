@@ -2,14 +2,18 @@ package teams
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 )
 
-// TODO: Add authentication of incoming request.
-
+var auth bool
+var keyBytes []byte
 var webhook WebHook
 
 // WebHook represnts the interface needed to handle Microsoft Teams WebHook Requests.
@@ -56,12 +60,25 @@ type User struct {
 }
 
 // NewHandler initializes and returns a Lambda handler to process incoming requests.
-func NewHandler(wh WebHook) func(events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func NewHandler(authenticateRequests bool, key string, wh WebHook) func(events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	auth = authenticateRequests
+	keyBytes, _ = base64.StdEncoding.DecodeString("UQKfe7xMmFf4j7V2neRBAbQ6JeXjWOool9rxoIq4Pq4=")
 	webhook = wh
 	return handler
 }
 
 func handler(lreq events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+
+	if auth {
+		authenticated := authenticateRequest(lreq)
+		if !authenticated {
+			return events.APIGatewayProxyResponse{
+				Body:       "Invalid Authentication",
+				StatusCode: http.StatusUnauthorized,
+			}, nil
+		}
+	}
+
 	var treq = Request{}
 	err := json.NewDecoder(strings.NewReader(lreq.Body)).Decode(&treq)
 	if err != nil {
@@ -80,6 +97,18 @@ func handler(lreq events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse
 		lresp.IsBase64Encoded = false
 	}
 	return lresp, err
+}
+
+func authenticateRequest(lreq events.APIGatewayProxyRequest) bool {
+
+	bodyBytes := []byte(lreq.Body)
+	authHeader := lreq.Headers["Authorization"]
+	messageMAC, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(authHeader, "HMAC "))
+
+	mac := hmac.New(sha256.New, keyBytes)
+	mac.Write(bodyBytes)
+	expectedMAC := mac.Sum(nil)
+	return hmac.Equal(messageMAC, expectedMAC)
 }
 
 // BuildResponse is a helper method to build a Response
